@@ -3,28 +3,46 @@ const ctx = canvas.getContext('2d');
 let drawing = false; 
 const is_fill_bg = false;
 
-if(is_fill_bg){
+if (is_fill_bg) {
     fill_background();
 }
 
-canvas.addEventListener('mousedown', () => { drawing = true; });
-canvas.addEventListener('mouseup', () => { drawing = false; ctx.beginPath(); });
-canvas.addEventListener('mousemove', draw);
+// Event listeners for mouse events
+canvas.addEventListener('mousedown', (e) => { startDrawing(e); });
+canvas.addEventListener('mouseup', () => { stopDrawing(); });
+canvas.addEventListener('mousemove', (e) => { draw(e); });
 
-canvas.addEventListener('touchstart', () => { drawing = true; });
-canvas.addEventListener('touchend', () => { drawing = false; ctx.beginPath(); });
-canvas.addEventListener('touchmove', draw);
+// Event listeners for touch events
+canvas.addEventListener('touchstart', (e) => { startDrawing(e.touches[0]); });
+canvas.addEventListener('touchend', () => { stopDrawing(); });
+canvas.addEventListener('touchmove', (e) => { draw(e.touches[0]); });
+
+// Functions to handle drawing
+function startDrawing(event) {
+    drawing = true;
+    draw(event); // Draw point on initial touch/mouse down
+}
+
+function stopDrawing() {
+    drawing = false;
+    ctx.beginPath();
+}
 
 function draw(event) {
     if (!drawing) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.strokeStyle = 'black';
 
-    ctx.lineTo(event.offsetX, event.offsetY);
+    ctx.lineTo(offsetX, offsetY);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(event.offsetX, event.offsetY);
+    ctx.moveTo(offsetX, offsetY);
 }
 
 function fill_background() {
@@ -32,46 +50,36 @@ function fill_background() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// Clear canvas
 document.getElementById('clearButton').addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if(is_fill_bg) fill_background();
+    if (is_fill_bg) fill_background();
     document.getElementById('previewImage').src = 'white.jpg';
     document.getElementById('result').innerText = ''; 
     document.getElementById('details').innerText = '';
     document.getElementById('previewImage2').src = 'white.jpg';
 });
 
+// Display image function
 function display_image() {
-    if(canvas.getContext) {
-        var myImage = canvas.toDataURL("myImage/jpg");
-    }
-
-    console.log(typeof(myImage) , myImage);
-
-
+    const myImage = canvas.toDataURL("image/jpg");
     document.getElementById('previewImage2').src = myImage;
 }
 
-document.getElementById('seecanvas').addEventListener('click' , () => {
+document.getElementById('seecanvas').addEventListener('click', () => {
     display_image();
-})
+});
 
+// Predict image function
 async function predictImage(imageBlob) {
-    // console.log('image blob: ' , imageBlob)
-
     const url = 'https://kangkengkhadev-test.hf.space/predict/';
-
     const formData = new FormData();
     formData.append('file', imageBlob);
-
-    console.log(...formData)
 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json'
-            },
+            headers: { 'Accept': 'application/json' },
             body: formData
         });
 
@@ -88,65 +96,48 @@ async function predictImage(imageBlob) {
 
 document.getElementById('predictButton').addEventListener('click', () => {
     canvas.toBlob(async (blob) => {
-        if(true){
-            const previewImage = document.getElementById('previewImage')
-            const url = URL.createObjectURL(blob);
+        const previewImage = document.getElementById('previewImage');
+        const url = URL.createObjectURL(blob);
 
-            previewImage.onload = () => {
-                // no longer need to read the blob so it's revoked
-                URL.revokeObjectURL(url);
-            };
+        previewImage.onload = () => {
+            URL.revokeObjectURL(url);
+        };
 
-            previewImage.src = url;
+        previewImage.src = url;
 
-            display_image();
-        }
-        
-
-        // console.log('blob:' , blob);
+        display_image();
 
         const result = await predictImage(blob);
-        console.log('result: ' , result);
-
         const predicted_class = result[0];
         const prob_healthy = result[1];
         const prob_pk = result[2];
 
         document.getElementById('result').innerText = `Prediction result: ${(predicted_class == 1) ? "Patient" : "Healthy"}`;
         document.getElementById('details').innerText = `Healthy: ${prob_healthy}\nPatient: ${prob_pk}`;
-    
-        if(predicted_class == 0){
+
+        if (predicted_class == 0) {
             document.getElementById("output_text").style.color = "green";
-            
-            const header_elem = document.getElementsByTagName('header')
-            console.log(header_elem)
-            for(elem of header_elem){
-                elem.style.backgroundColor = 'green'
+            const header_elem = document.getElementsByTagName('header');
+            for (let elem of header_elem) {
+                elem.style.backgroundColor = 'green';
             }
-        }else{
+        } else {
             document.getElementById("output_text").style.color = 'red';
-            
-            const header_elem = document.getElementsByTagName('header')
-            
-            for(elem of header_elem){
-                elem.style.backgroundColor = '#B31B1B'
+            const header_elem = document.getElementsByTagName('header');
+            for (let elem of header_elem) {
+                elem.style.backgroundColor = '#B31B1B';
             }
         }
-    },'image/jpg');
-
+    }, 'image/jpg');
 });
 
 document.getElementById('saveButton').addEventListener('click', () => {
     canvas.toBlob(async (blob) => {
-        console.log(blob);
-
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = 'drawing.jpg'; // Set the download file name
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link); // Clean up
-
-        const result = await predictImage(blob);
-    },'image/jpg');
+    }, 'image/jpg');
 });
